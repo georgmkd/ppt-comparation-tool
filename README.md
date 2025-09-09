@@ -1,0 +1,1 @@
+PPT file comparation tool for content of two files

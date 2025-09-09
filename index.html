@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PPT File Comparator</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.7.1/dist/jszip.min.js"></script>
+  <style>
+    .file-input-label:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+
+    .result-text {
+      font-size: 2rem;
+      font-weight: bold;
+    }
+
+    @media (min-width: 768px) {
+      .result-text {
+        font-size: 3rem;
+      }
+    }
+
+    .result-section {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.25rem 0;
+    }
+  </style>
+</head>
+
+<body class="bg-gray-100 text-gray-800 font-sans p-6">
+
+  <div class="max-w-4xl mx-auto bg-white p-8 rounded-xl shadow-lg">
+    <header class="text-center mb-8">
+      <h1 class="text-3xl md:text-4xl font-bold text-gray-900 mb-2">PPT File Comparator</h1>
+      <p class="text-lg text-gray-600">Upload two .pptx files to compare their text content.</p>
+    </header>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+      <div class="flex flex-col items-center p-6 bg-gray-50 rounded-lg shadow-sm">
+        <label for="file-input-1"
+          class="file-input-label w-full cursor-pointer bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-all duration-200 text-center">
+          Select File 1
+        </label>
+        <input type="file" id="file-input-1" class="hidden" accept=".pptx">
+        <p id="file-name-1" class="mt-4 text-gray-500 text-sm"></p>
+      </div>
+
+      <div class="flex flex-col items-center p-6 bg-gray-50 rounded-lg shadow-sm">
+        <label for="file-input-2"
+          class="file-input-label w-full cursor-pointer bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-all duration-200 text-center">
+          Select File 2
+        </label>
+        <input type="file" id="file-input-2" class="hidden" accept=".pptx">
+        <p id="file-name-2" class="mt-4 text-gray-500 text-sm"></p>
+      </div>
+    </div>
+
+    <div class="text-center">
+      <button id="compare-button"
+        class="w-full md:w-1/2 bg-gray-400 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-all duration-200 cursor-not-allowed"
+        disabled>
+        Compare Files
+      </button>
+    </div>
+
+    <div id="status-message" class="text-center p-4 rounded-lg mt-8 hidden"></div>
+  </div>
+
+  <script>
+    const fileInput1 = document.getElementById('file-input-1');
+    const fileInput2 = document.getElementById('file-input-2');
+    const fileName1 = document.getElementById('file-name-1');
+    const fileName2 = document.getElementById('file-name-2');
+    const compareButton = document.getElementById('compare-button');
+    const statusMessageElement = document.getElementById('status-message');
+
+    let file1 = null;
+    let file2 = null;
+
+    const checkFiles = () => {
+      if (file1 && file2) {
+        compareButton.disabled = false;
+        compareButton.classList.remove('bg-gray-400', 'cursor-not-allowed');
+        compareButton.classList.add('bg-blue-600', 'hover:bg-blue-700', 'cursor-pointer');
+      } else {
+        compareButton.disabled = true;
+        compareButton.classList.add('bg-gray-400', 'cursor-not-allowed');
+        compareButton.classList.remove('bg-blue-600', 'hover:bg-blue-700', 'cursor-pointer');
+      }
+    };
+
+    fileInput1.addEventListener('change', (event) => {
+      file1 = event.target.files[0];
+      fileName1.textContent = file1 ? `Selected file: ${file1.name}` : '';
+      checkFiles();
+    });
+
+    fileInput2.addEventListener('change', (event) => {
+      file2 = event.target.files[0];
+      fileName2.textContent = file2 ? `Selected file: ${file2.name}` : '';
+      checkFiles();
+    });
+
+    compareButton.addEventListener('click', async () => {
+      showMessage('Comparing PPTX files...', 'bg-blue-100 text-blue-700');
+      compareButton.disabled = true;
+
+      try {
+        const text1 = await extractTextFromPPTX(file1);
+        const text2 = await extractTextFromPPTX(file2);
+
+        const words1 = text1.split(/\s+/);
+        const words2 = text2.split(/\s+/);
+
+        let matches = 0;
+        const total = Math.max(words1.length, words2.length);
+
+        words1.forEach((w, i) => {
+          if (w === words2[i]) matches++;
+        });
+
+        const percentage = total > 0 ? (matches / total) * 100 : 0;
+
+        let resultHtml = `
+          <p class="result-text">${percentage.toFixed(2)}% Similar</p>
+          <p class="text-xl font-semibold mb-4">Summary</p>
+          <div class="text-left space-y-2">
+            <div class="result-section"><span>Words in File 1:</span><span>${words1.length}</span></div>
+            <div class="result-section"><span>Words in File 2:</span><span>${words2.length}</span></div>
+            <div class="result-section"><span>Matching words:</span><span>${matches}</span></div>
+            <div class="result-section"><span>Total compared:</span><span>${total}</span></div>
+          </div>
+        `;
+
+        showMessage(resultHtml, 'bg-green-100 text-green-700');
+      } catch (error) {
+        console.error(error);
+        showMessage(`Error: ${error.message}`, 'bg-red-100 text-red-700');
+      } finally {
+        compareButton.disabled = false;
+        checkFiles();
+      }
+    });
+
+    async function extractTextFromPPTX(file) {
+      const data = await file.arrayBuffer();
+      const zip = await JSZip.loadAsync(data);
+      let text = "";
+
+      const slideRegex = /^ppt\/slides\/slide\d+\.xml$/;
+      const slideFiles = Object.keys(zip.files).filter(name => slideRegex.test(name));
+
+      for (const name of slideFiles) {
+        const xml = await zip.files[name].async("string");
+        const matches = xml.match(/<a:t>(.*?)<\/a:t>/g);
+        if (matches) {
+          matches.forEach(m => {
+            text += m.replace(/<\/?a:t>/g, "") + " ";
+          });
+        }
+      }
+      return text.trim();
+    }
+
+    function showMessage(html, className) {
+      statusMessageElement.innerHTML = html;
+      statusMessageElement.className = `text-base md:text-xl font-medium p-4 rounded-lg mt-4 ${className}`;
+      statusMessageElement.classList.remove('hidden');
+    }
+  </script>
+
+</body>
+</html>
