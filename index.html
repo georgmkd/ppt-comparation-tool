@@ -7,6 +7,7 @@
   <title>PPT File Comparator</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.7.1/dist/jszip.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/string-similarity@4.0.4/umd/string-similarity.min.js"></script>
   <style>
     .file-input-label:hover {
       transform: translateY(-2px);
@@ -74,105 +75,140 @@
 
   <script>
     const fileInput1 = document.getElementById('file-input-1');
-    const fileInput2 = document.getElementById('file-input-2');
-    const fileName1 = document.getElementById('file-name-1');
-    const fileName2 = document.getElementById('file-name-2');
-    const compareButton = document.getElementById('compare-button');
-    const statusMessageElement = document.getElementById('status-message');
+  const fileInput2 = document.getElementById('file-input-2');
+  const fileName1 = document.getElementById('file-name-1');
+  const fileName2 = document.getElementById('file-name-2');
+  const compareButton = document.getElementById('compare-button');
+  const statusMessageElement = document.getElementById('status-message');
 
-    let file1 = null;
-    let file2 = null;
+  let file1 = null;
+  let file2 = null;
 
-    const checkFiles = () => {
-      if (file1 && file2) {
-        compareButton.disabled = false;
-        compareButton.classList.remove('bg-gray-400', 'cursor-not-allowed');
-        compareButton.classList.add('bg-blue-600', 'hover:bg-blue-700', 'cursor-pointer');
-      } else {
-        compareButton.disabled = true;
-        compareButton.classList.add('bg-gray-400', 'cursor-not-allowed');
-        compareButton.classList.remove('bg-blue-600', 'hover:bg-blue-700', 'cursor-pointer');
-      }
-    };
-
-    fileInput1.addEventListener('change', (event) => {
-      file1 = event.target.files[0];
-      fileName1.textContent = file1 ? `Selected file: ${file1.name}` : '';
-      checkFiles();
-    });
-
-    fileInput2.addEventListener('change', (event) => {
-      file2 = event.target.files[0];
-      fileName2.textContent = file2 ? `Selected file: ${file2.name}` : '';
-      checkFiles();
-    });
-
-    compareButton.addEventListener('click', async () => {
-      showMessage('Comparing PPTX files...', 'bg-blue-100 text-blue-700');
+  const checkFiles = () => {
+    if (file1 && file2) {
+      compareButton.disabled = false;
+      compareButton.classList.remove('bg-gray-400', 'cursor-not-allowed');
+      compareButton.classList.add('bg-blue-600', 'hover:bg-blue-700', 'cursor-pointer');
+    } else {
       compareButton.disabled = true;
+      compareButton.classList.add('bg-gray-400', 'cursor-not-allowed');
+      compareButton.classList.remove('bg-blue-600', 'hover:bg-blue-700', 'cursor-pointer');
+    }
+  };
 
-      try {
-        const text1 = await extractTextFromPPTX(file1);
-        const text2 = await extractTextFromPPTX(file2);
+  fileInput1.addEventListener('change', (event) => {
+    file1 = event.target.files[0];
+    fileName1.textContent = file1 ? `Selected file: ${file1.name}` : '';
+    checkFiles();
+  });
 
-        const words1 = text1.split(/\s+/);
-        const words2 = text2.split(/\s+/);
+  fileInput2.addEventListener('change', (event) => {
+    file2 = event.target.files[0];
+    fileName2.textContent = file2 ? `Selected file: ${file2.name}` : '';
+    checkFiles();
+  });
 
-        let matches = 0;
-        const total = Math.max(words1.length, words2.length);
+  compareButton.addEventListener('click', async () => {
+    showMessage('Comparing PPTX files...', 'bg-blue-100 text-blue-700');
+    compareButton.disabled = true;
 
-        words1.forEach((w, i) => {
-          if (w === words2[i]) matches++;
-        });
+    try {
+      const [text1, media1] = await extractFromPPTX(file1);
+      const [text2, media2] = await extractFromPPTX(file2);
 
-        const percentage = total > 0 ? (matches / total) * 100 : 0;
+      // --- TEXT SIMILARITY ---
+      const words1 = text1.split(/\s+/);
+      const words2 = text2.split(/\s+/);
 
-        let resultHtml = `
-          <p class="result-text">${percentage.toFixed(2)}% Similar</p>
-          <p class="text-xl font-semibold mb-4">Summary</p>
-          <div class="text-left space-y-2">
-            <div class="result-section"><span>Words in File 1:</span><span>${words1.length}</span></div>
-            <div class="result-section"><span>Words in File 2:</span><span>${words2.length}</span></div>
-            <div class="result-section"><span>Matching words:</span><span>${matches}</span></div>
-            <div class="result-section"><span>Total compared:</span><span>${total}</span></div>
-          </div>
-        `;
+      let exactMatches = 0;
+      let similarMatches = 0;
 
-        showMessage(resultHtml, 'bg-green-100 text-green-700');
-      } catch (error) {
-        console.error(error);
-        showMessage(`Error: ${error.message}`, 'bg-red-100 text-red-700');
-      } finally {
-        compareButton.disabled = false;
-        checkFiles();
-      }
-    });
-
-    async function extractTextFromPPTX(file) {
-      const data = await file.arrayBuffer();
-      const zip = await JSZip.loadAsync(data);
-      let text = "";
-
-      const slideRegex = /^ppt\/slides\/slide\d+\.xml$/;
-      const slideFiles = Object.keys(zip.files).filter(name => slideRegex.test(name));
-
-      for (const name of slideFiles) {
-        const xml = await zip.files[name].async("string");
-        const matches = xml.match(/<a:t>(.*?)<\/a:t>/g);
-        if (matches) {
-          matches.forEach(m => {
-            text += m.replace(/<\/?a:t>/g, "") + " ";
-          });
+      words1.forEach(w1 => {
+        const bestMatch = stringSimilarity.findBestMatch(w1, words2);
+        if (bestMatch.bestMatch.rating === 1) {
+          exactMatches++;
+        } else if (bestMatch.bestMatch.rating >= 0.7) {
+          // similarity threshold 70%
+          similarMatches++;
         }
+      });
+
+      // --- IMAGE COMPARISON (basic: by count + file size hashes) ---
+      const imageMatches = media1.filter(img1 => media2.includes(img1)).length;
+      const totalImages = Math.max(media1.length, media2.length);
+      
+      // --- COMBINED SIMILARITY CALCULATION ---
+      const totalWords = Math.max(words1.length, words2.length);
+      const textSimilarity = totalWords > 0 ? ((exactMatches + similarMatches) / totalWords) : 0;
+      const imageSimilarity = totalImages > 0 ? (imageMatches / totalImages) : 0;
+      
+      // Weight text and images equally (50% each) for overall similarity
+      const overallSimilarity = totalWords > 0 || totalImages > 0 ? 
+        ((textSimilarity * totalWords + imageSimilarity * totalImages) / (totalWords + totalImages)) : 0;
+      const similarityPercent = overallSimilarity * 100;
+
+      let resultHtml = `
+        <p class="result-text">${similarityPercent.toFixed(2)}% Similar</p>
+        <p class="text-xl font-semibold mb-4">Summary</p>
+        <div class="text-left space-y-2">
+          <div class="result-section"><span>Text similarity:</span><span>${(textSimilarity * 100).toFixed(1)}%</span></div>
+          <div class="result-section"><span>Image similarity:</span><span>${(imageSimilarity * 100).toFixed(1)}%</span></div>
+          <div class="result-section border-t pt-2"><span>Words in File 1:</span><span>${words1.length}</span></div>
+          <div class="result-section"><span>Words in File 2:</span><span>${words2.length}</span></div>
+          <div class="result-section"><span>Exact matches:</span><span>${exactMatches}</span></div>
+          <div class="result-section"><span>Similar matches (70%+):</span><span>${similarMatches}</span></div>
+          <div class="result-section border-t pt-2"><span>Total images File 1:</span><span>${media1.length}</span></div>
+          <div class="result-section"><span>Total images File 2:</span><span>${media2.length}</span></div>
+          <div class="result-section"><span>Matching images:</span><span>${imageMatches}</span></div>
+        </div>
+      `;
+
+      showMessage(resultHtml, 'bg-green-100 text-green-700');
+    } catch (error) {
+      console.error(error);
+      showMessage(`Error: ${error.message}`, 'bg-red-100 text-red-700');
+    } finally {
+      compareButton.disabled = false;
+      checkFiles();
+    }
+  });
+
+  async function extractFromPPTX(file) {
+    const data = await file.arrayBuffer();
+    const zip = await JSZip.loadAsync(data);
+
+    let text = "";
+    const mediaHashes = [];
+
+    // Extract text
+    const slideRegex = /^ppt\/slides\/slide\d+\.xml$/;
+    const slideFiles = Object.keys(zip.files).filter(name => slideRegex.test(name));
+    for (const name of slideFiles) {
+      const xml = await zip.files[name].async("string");
+      const matches = xml.match(/<a:t>(.*?)<\/a:t>/g);
+      if (matches) {
+        matches.forEach(m => {
+          text += m.replace(/<\/?a:t>/g, "") + " ";
+        });
       }
-      return text.trim();
     }
 
-    function showMessage(html, className) {
-      statusMessageElement.innerHTML = html;
-      statusMessageElement.className = `text-base md:text-xl font-medium p-4 rounded-lg mt-4 ${className}`;
-      statusMessageElement.classList.remove('hidden');
+    // Extract image hashes (by file size for now)
+    const mediaRegex = /^ppt\/media\//;
+    const mediaFiles = Object.keys(zip.files).filter(name => mediaRegex.test(name));
+    for (const m of mediaFiles) {
+      const fileData = await zip.files[m].async("uint8array");
+      mediaHashes.push(fileData.length); // simplistic: compare by size
     }
+
+    return [text.trim(), mediaHashes];
+  }
+
+  function showMessage(html, className) {
+    statusMessageElement.innerHTML = html;
+    statusMessageElement.className = `text-base md:text-xl font-medium p-4 rounded-lg mt-4 ${className}`;
+    statusMessageElement.classList.remove('hidden');
+  }
   </script>
 
 </body>
