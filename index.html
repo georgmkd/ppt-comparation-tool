@@ -150,15 +150,25 @@
       let resultHtml = `
         <p class="result-text">${similarityPercent.toFixed(2)}% Similar</p>
         <p class="text-xl font-semibold mb-4">Summary</p>
-        <div class="text-left space-y-2">
-          <div class="result-section"><span>Text similarity:</span><span>${(textSimilarity * 100).toFixed(1)}%</span></div>
-          <div class="result-section"><span>Image similarity:</span><span>${(imageSimilarity * 100).toFixed(1)}%</span></div>
-          <div class="result-section border-t pt-2"><span>Words in File 1:</span><span>${words1.length}</span></div>
-          <div class="result-section"><span>Words in File 2:</span><span>${words2.length}</span></div>
-          <div class="result-section"><span>Exact matches:</span><span>${exactMatches}</span></div>
-          <div class="result-section border-t pt-2"><span>Total images File 1:</span><span>${media1.length}</span></div>
-          <div class="result-section"><span>Total images File 2:</span><span>${media2.length}</span></div>
-          <div class="result-section"><span>Matching images:</span><span>${imageMatches}</span></div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div class="bg-blue-50 p-4 rounded-lg">
+            <h3 class="text-lg font-semibold mb-3 text-blue-800">Text Analysis</h3>
+            <div class="space-y-2">
+              <div class="result-section"><span>Text similarity:</span><span class="font-bold text-blue-600">${(textSimilarity * 100).toFixed(1)}%</span></div>
+              <div class="result-section"><span>Words in File 1:</span><span>${words1.length}</span></div>
+              <div class="result-section"><span>Words in File 2:</span><span>${words2.length}</span></div>
+              <div class="result-section"><span>Exact matches:</span><span>${exactMatches}</span></div>
+            </div>
+          </div>
+          <div class="bg-green-50 p-4 rounded-lg">
+            <h3 class="text-lg font-semibold mb-3 text-green-800">Image Analysis</h3>
+            <div class="space-y-2">
+              <div class="result-section"><span>Image similarity:</span><span class="font-bold text-green-600">${(imageSimilarity * 100).toFixed(1)}%</span></div>
+              <div class="result-section"><span>Images in File 1:</span><span>${media1.length}</span></div>
+              <div class="result-section"><span>Images in File 2:</span><span>${media2.length}</span></div>
+              <div class="result-section"><span>Matching images:</span><span>${imageMatches}</span></div>
+            </div>
+          </div>
         </div>
       `;
 
